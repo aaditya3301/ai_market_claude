@@ -264,7 +264,7 @@ export async function embedPendingKnowledgeChunks(params: {
         embedding: vectorLiteral(vector),
         metadata: {
           ...metadata,
-          embedding_model: process.env.GEMINI_EMBED_MODEL || 'text-embedding-004',
+          embedding_model: process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001',
           embedded_at: new Date().toISOString(),
         },
       })

@@ -48,9 +48,38 @@ export interface LLMCallResult<T> {
 }
 
 const DEFAULT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
-const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || 'text-embedding-004';
+const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
 const DEFAULT_BUDGET_USD_MONTHLY = Number(process.env.DEFAULT_LLM_BUDGET_USD_MONTHLY || 200);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const STATIC_EMBED_FALLBACKS = ['gemini-embedding-001', 'gemini-embedding-2-preview', 'text-embedding-004', 'embedding-001'];
+
+let resolvedEmbedModel: string | null = null;
+
+function normalizeModelId(modelId: string): string {
+  return modelId.replace(/^models\//, '').trim();
+}
+
+function getEmbedModelCandidates(): string[] {
+  const envFallbacks = (process.env.GEMINI_EMBED_MODEL_FALLBACKS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const ordered = [resolvedEmbedModel, EMBED_MODEL, ...envFallbacks, ...STATIC_EMBED_FALLBACKS]
+    .filter((item): item is string => Boolean(item && item.trim()))
+    .map(normalizeModelId);
+
+  return [...new Set(ordered)];
+}
+
+function isEmbedCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    (message.includes('not found') && message.includes('api version')) ||
+    (message.includes('not supported') && message.includes('embedcontent')) ||
+    (message.includes('not found') && message.includes('embedcontent'))
+  );
+}
 
 function normalizeTenantId(tenantId?: string): string {
   return tenantId && tenantId.trim() ? tenantId : LEGACY_TENANT_ID;
@@ -314,11 +343,46 @@ async function generateTextInternal(input: LLMCallInput): Promise<LLMCallResult<
   }
 }
 
-async function embedOne(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: EMBED_MODEL });
-  const embedded = await model.embedContent(text);
-  const values = (embedded as unknown as { embedding?: { values?: number[] } }).embedding?.values;
-  return Array.isArray(values) ? values : [];
+async function embedOne(text: string): Promise<{ vector: number[]; model: string }> {
+  const cleaned = text.trim();
+  if (!cleaned) {
+    return { vector: [], model: normalizeModelId(resolvedEmbedModel || EMBED_MODEL) };
+  }
+
+  const candidates = getEmbedModelCandidates();
+  let lastError: unknown = null;
+
+  for (const modelId of candidates) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelId });
+      const embedded = await model.embedContent(cleaned);
+      const values = (embedded as unknown as { embedding?: { values?: number[] } }).embedding?.values;
+
+      if (Array.isArray(values) && values.length > 0) {
+        resolvedEmbedModel = modelId;
+        return { vector: values, model: modelId };
+      }
+
+      lastError = new Error(`Empty embedding values from model ${modelId}`);
+    } catch (error: unknown) {
+      lastError = error;
+      if (isEmbedCompatibilityError(error)) {
+        logger.warn({
+          msg: 'llm.embed.model_incompatible',
+          model: modelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+
+  throw new Error('No compatible Gemini embedding model is available for this API key.');
 }
 
 export const llmRouter = {
@@ -346,7 +410,15 @@ export const llmRouter = {
     await enforceBudget(tenantId);
 
     if (Array.isArray(input.text)) {
-      const vectors = await Promise.all(input.text.map((item) => embedOne(item)));
+      if (input.text.length === 0) {
+        return [];
+      }
+
+      const [firstText, ...restTexts] = input.text;
+      const firstResult = await embedOne(firstText);
+      const restResults = restTexts.length ? await Promise.all(restTexts.map((item) => embedOne(item))) : [];
+      const allResults = [firstResult, ...restResults];
+      const vectors = allResults.map((item) => item.vector);
       const promptHash = createHash('sha256').update(input.text.join('\n')).digest('hex');
       const inputTokens = input.text.reduce((sum, item) => sum + estimateTokens(item), 0);
       const outputTokens = vectors.reduce((sum, item) => sum + item.length, 0);
@@ -356,7 +428,7 @@ export const llmRouter = {
         tenantId,
         runId: input.runId,
         task: 'embedding',
-        model: EMBED_MODEL,
+        model: firstResult.model,
         inputTokens,
         outputTokens,
         costCents,
@@ -368,7 +440,8 @@ export const llmRouter = {
       return vectors;
     }
 
-    const vector = await embedOne(input.text);
+    const result = await embedOne(input.text);
+    const vector = result.vector;
     const inputTokens = estimateTokens(input.text);
     const costCents = estimateCostCents(inputTokens, 0);
 
@@ -376,7 +449,7 @@ export const llmRouter = {
       tenantId,
       runId: input.runId,
       task: 'embedding',
-      model: EMBED_MODEL,
+      model: result.model,
       inputTokens,
       outputTokens: vector.length,
       costCents,

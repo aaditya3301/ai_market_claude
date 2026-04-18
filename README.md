@@ -167,6 +167,36 @@ Expected: success true and api_key + secret returned.
 - Postiz not reachable:
 	- Ensure docker-compose in postiz is up and port 4007 is open.
 
+## 10. Phase 2 Evaluation Checks
+
+Run retrieval eval suite:
+
+```bash
+curl -X POST http://localhost:3000/api/internal/eval/retrieval \
+	-H "x-bootstrap-token: YOUR_INTERNAL_BOOTSTRAP_TOKEN" \
+	-H "content-type: application/json" \
+	-d '{"tenant_id":"PASTE_TENANT_ID_HERE"}'
+```
+
+Run agent golden suite:
+
+```bash
+curl -X POST http://localhost:3000/api/internal/eval/agents \
+	-H "x-bootstrap-token: YOUR_INTERNAL_BOOTSTRAP_TOKEN" \
+	-H "content-type: application/json" \
+	-d '{"tenant_id":"PASTE_TENANT_ID_HERE"}'
+```
+
+Expected:
+
+- Retrieval suite returns pass=true with avgPrecisionAt8 >= 0.7
+- Agent suite returns pass=true with evidence-backed war room decisions
+
+## 11. Phase 2 Status
+
+- Phase 2 intelligence pipelines and agents are implemented.
+- Final readiness depends on running migration 005 and passing the two eval endpoints above in your environment.
+
 ## Project status
 
 - Phase 1 foundations are implemented: multitenancy, connector API, approvals, Inngest runtime, worker scaffold.

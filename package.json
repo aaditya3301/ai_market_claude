@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker:dev": "cd apps/worker && uvicorn app.main:app --reload --port 8000"
+    "worker:dev": "cd apps/worker && uvicorn app.main:app --reload --port 8000",
+    "eval:retrieval": "echo 'POST /api/internal/eval/retrieval with x-bootstrap-token to run retrieval eval suite'",
+    "eval:agents": "echo 'POST /api/internal/eval/agents with x-bootstrap-token to run agent golden suite'"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
