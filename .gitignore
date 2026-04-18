@@ -40,6 +40,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# python worker
+apps/worker/venv/
+apps/worker/.venv/
+apps/worker/**/__pycache__/
+apps/worker/.pytest_cache/
+apps/worker/.mypy_cache/
+apps/worker/.ruff_cache/
+apps/worker/.coverage
+apps/worker/*.pyc
+
 #docs
 /docs
 /Skill-Example

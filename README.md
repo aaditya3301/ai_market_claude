@@ -1,211 +1,171 @@
-# Aadi Market: The Autonomous Marketing Department
+# Aadi Market
 
-Aadi Market is an enterprise-grade, multi-agent artificial intelligence platform designed to function as a self-operating marketing department. The system orchestrates the entire marketing lifecycle, including real-time market research, strategic planning, automated content creation, social media distribution, and advertising optimization.
+Practical quickstart for local setup, run, and smoke testing.
 
----
+## Stack
 
-## Core Capabilities
+- Web app: Next.js 16 + TypeScript
+- Database: Supabase Postgres
+- Event runtime: Inngest
+- Worker: Python FastAPI
+- Publishing middleware: Postiz (Docker)
 
-### 1. Strategic Planning Engine (Ghost Planner)
-*   **Live Data Acquisition:** Utilizes Jina Reader and Firecrawl for real-time extraction of brand and competitor data from websites and social profiles.
-*   **Strategic Intelligence:** Employs Google Gemini to synthesize extracted data into comprehensive brand strategies, target audience profiles, and tactical roadmaps.
+## Prerequisites
 
-### 2. Strategic War Room Simulation
-*   **Multi-Agent Dialectics:** Conducts high-fidelity simulations featuring specialized AI personas (Skeptical Auditor, Creative Director, and Data Analyst) to critique and refine marketing strategies.
-*   **Institutional Memory:** Strategic directives from these simulations are persisted and used to constrain and guide all downstream content generation.
+- Node.js 20+
+- npm 10+
+- Python 3.11+
+- Docker Desktop
+- A Supabase project
 
-### 3. Automated Content Generation
-*   **Cross-Channel Distribution:** Orchestrates the generation of platform-optimized content for LinkedIn, Twitter, Instagram, Facebook, and Reddit.
-*   **Creative Asset Production:** Integrated with Fal.ai (Flux) for the generation of professional marketing imagery, with robust fallback mechanisms to Google Imagen.
+## 1. Install dependencies
 
-### 4. Digital Advertising Infrastructure (Meta & Google)
-*   **Multivariate Experimentation:** Automatically constructs ad sets based on distinct psychological triggers (Logical, Emotional, and Urgent).
-*   **API Integration:** Direct connectivity with Meta Ads Manager and Google Ads for automated campaign deployment.
-*   **Autonomous Optimization:** A dedicated agent analyzes real-time performance metrics and automatically deactivates underperforming variants to maximize Return on Ad Spend (ROAS).
-
-### 5. Centralized Publishing Hub (Postiz)
-*   **Enterprise Middleware:** Full integration with a self-hosted Postiz stack utilizing the Temporal workflow engine for reliable execution.
-*   **Automated Scheduling:** Seamless transmission of generated assets from Aadi Market to the publishing queue for global distribution.
-
----
-
-## Technical Architecture
-
-*   **Application Framework:** Next.js 14 (App Router), Tailwind CSS
-*   **Data Layer:** Supabase (PostgreSQL)
-*   **Inference Engines:** Google Gemini 1.5 Flash (Text), Fal.ai Flux (Images)
-*   **Infrastructure:** Docker Compose, Inngest (event runtime), Railway (Python worker)
-*   **Distribution:** Postiz Social Media Middleware
-
----
-
-## Deployment and Installation
-
-### 1. System Requirements
-*   Docker Desktop (Required for Postiz and Temporal services)
-*   Supabase Project (PostgreSQL instance)
-*   Standard API Credentials (Gemini, Fal.ai)
-
-### 2. Workspace Configuration
-Configure your environment by duplicating `.env.example` to `.env` and providing the necessary credentials:
 ```bash
-GEMINI_API_KEY=your_key
-FAL_KEY=your_key
-SUPABASE_URL=your_url
-SUPABASE_ANON_KEY=your_key
-SUPABASE_SERVICE_ROLE_KEY=your_key
-POSTIZ_API_URL=http://localhost:4007/api/v1
-NEXT_PUBLIC_POSTIZ_KEY=your_postiz_api_key
-
-# Phase 1 additions
-CREDENTIALS_MASTER_KEY=base64_32_byte_key
-CREDENTIALS_KEY_ID=k1
-INNGEST_EVENT_KEY=your_inngest_event_key
-INNGEST_SIGNING_KEY=your_inngest_signing_key
-CONNECTOR_NONCE_REDIS_URL=your_upstash_redis_url
-WORKER_BASE_URL=http://localhost:8000
-WORKER_SHARED_SECRET=your_worker_shared_secret
-INTERNAL_BOOTSTRAP_TOKEN=admin_bootstrap_secret
+npm install
 ```
 
-### 3. Schema Initialization
-Execute the SQL migration scripts located in `src/db/migrations/001_schema.sql` via the Supabase SQL Editor.
+## 2. Configure environment
 
-### 4. Local Execution
+Copy env template:
+
 ```bash
-# Clone the repository
-git clone https://github.com/aaditya3301/ai_market.git
-cd ai_market
+cp .env.example .env
+```
 
-# Initialize the Postiz distribution stack
+Then fill required values in .env:
+
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- GEMINI_API_KEY
+- CREDENTIALS_MASTER_KEY
+- INNGEST_EVENT_KEY
+- INNGEST_SIGNING_KEY
+- INTERNAL_BOOTSTRAP_TOKEN
+- WORKER_SHARED_SECRET
+
+Notes:
+
+- Use NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (these names are required by the code).
+- Keep AUTOMATION_MODE=simulation for first-time setup.
+
+## 3. Run database migrations
+
+Run these SQL files in your Supabase SQL editor in this order:
+
+1. src/db/migrations/001_schema.sql
+2. src/db/migrations/002_automation_runs.sql
+3. src/db/migrations/003_multitenancy.sql
+
+## 4. Start Postiz (Docker)
+
+```bash
 cd postiz
 docker-compose up -d
-
-# Execute the main application
 cd ..
-npm install
+```
+
+## 5. Start Python worker
+
+```bash
+cd apps/worker
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+# macOS/Linux
+# source .venv/bin/activate
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+Worker health endpoint:
+
+```bash
+curl http://localhost:8000/health
+```
+
+## 6. Start web app
+
+In a new terminal from project root:
+
+```bash
 npm run dev
 ```
 
----
+App URL:
 
-## Event Runtime (Inngest)
-Phase 1 replaces Vercel cron with Inngest workflows and scheduled functions:
+- http://localhost:3000
 
-*   `run.requested` drives async workflow execution.
-*   `approval.resolved` resumes paused runs.
-*   `approvals-expiry-sweep` auto-expires stale approvals every 15 minutes.
-*   `credentials-validator` runs daily credential validation fan-out.
-
-Inngest handler route: `/api/inngest`
-
----
-
-## Connector API (v1)
-
-Phase 1 adds signed connector endpoints under `/api/v1/*`:
-
-*   `POST /api/v1/runs`
-*   `GET /api/v1/runs`
-*   `GET /api/v1/runs/:id`
-*   `GET /api/v1/runs/:id/outputs`
-*   `POST /api/v1/runs/:id/cancel`
-*   `GET /api/v1/approvals`
-*   `GET /api/v1/approvals/:id`
-*   `POST /api/v1/approvals/:id/resolve`
-*   `POST /api/v1/webhooks`
-*   `GET /api/v1/tenants/me`
-
-Auth headers required on every `v1` request:
-
-*   `x-ai-market-key`
-*   `x-ai-market-timestamp`
-*   `x-ai-market-signature`
-*   `x-ai-market-nonce`
-
-See [docs/connector-contract.md](docs/connector-contract.md) for the error catalog and response envelope.
-
----
-
-## Automation Runtime Modes
-
-Set `AUTOMATION_MODE` in environment config to control automation behavior:
-
-*   **full**: End-to-end automation including external publishing and spend-bearing actions.
-*   **guided**: Full pipeline with approval gates for spend-bearing actions.
-*   **simulation**: Internal generation only, no external publishing/spend side effects.
-
-Default mode is `simulation` when `AUTOMATION_MODE` is not set.
-
-### Production Fail-Fast Guardrails
-
-In production (or when `AUTOMATION_STRICT_VALIDATION=true`), startup validation enforces required configuration.
-
-Always required:
+## 7. Optional: run Inngest dev server
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-GEMINI_API_KEY=...
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
 ```
 
-Required for `full` and `guided` modes:
+## 8. Standard smoke checks
+
+### A) Build check
 
 ```bash
-POSTIZ_API_URL=...
-POSTIZ_API_KEY=...   # or NEXT_PUBLIC_POSTIZ_KEY
-CRON_SECRET=...
+npm run build
 ```
 
-If required values are missing, the app throws at startup to prevent silent automation degradation.
+Expected: build completes without errors.
 
-### Brand Identity Rule for Automation
+### B) Internal worker bridge check
 
-Automation/orchestration paths must provide an explicit `brandId`.
-
-Implicit fallback brand values are not allowed for automated server runs.
-
----
-
-## Standard API Envelope (Phase 0)
-
-Automation APIs should use this stable envelope pattern:
-
-```json
-{
-	"success": true,
-	"data": {},
-	"error": null,
-	"meta": {
-		"request_id": "uuid",
-		"timestamp": "ISO-8601",
-		"step": "optional-step-name",
-		"mode": "full|guided|simulation"
-	}
-}
+```bash
+curl -X POST http://localhost:3000/api/internal/worker/echo \
+	-H "content-type: application/json" \
+	-d '{"ping":"ok"}'
 ```
 
-Error shape:
+Expected: success true and echoed payload.
 
-```json
-{
-	"success": false,
-	"data": null,
-	"error": {
-		"code": "ERROR_CODE",
-		"message": "Human readable error",
-		"details": {}
-	},
-	"meta": {
-		"request_id": "uuid",
-		"timestamp": "ISO-8601"
-	}
-}
+### C) Tenant bootstrap check
+
+```bash
+curl -X POST http://localhost:3000/api/internal/admin/tenants \
+	-H "x-bootstrap-token: YOUR_INTERNAL_BOOTSTRAP_TOKEN" \
+	-H "content-type: application/json" \
+	-d '{
+		"parent_tenant_id": "local-tenant-1",
+		"parent_platform_id": "local",
+		"name": "Local Tenant",
+		"slug": "local-tenant"
+	}'
 ```
 
----
+Expected: success true and tenant object returned.
 
-## Notice
-Aadi Market is an automated execution tool. All generated financial commitments (Ads) and public communications (Social Posts) should be monitored via their respective platform dashboards.
+### D) API key issuance check
 
-*Maintained by Aaditya Singhal (aaditya3301)*
+```bash
+curl -X POST http://localhost:3000/api/internal/admin/api-keys \
+	-H "x-bootstrap-token: YOUR_INTERNAL_BOOTSTRAP_TOKEN" \
+	-H "content-type: application/json" \
+	-d '{
+		"tenant_id": "PASTE_TENANT_ID_HERE",
+		"name": "local-key",
+		"scopes": ["runs:create", "runs:list", "runs:read", "runs:outputs", "runs:cancel", "approvals:list", "approvals:read", "approvals:resolve", "webhooks:write", "tenants:read", "credentials:list", "credentials:write"]
+	}'
+```
+
+Expected: success true and api_key + secret returned.
+
+## 9. Common issues
+
+- Missing env error at runtime:
+	- Verify .env has all required keys and restart dev server.
+- Supabase table errors:
+	- Re-check migration order 001 -> 002 -> 003.
+- Worker bridge fails:
+	- Ensure WORKER_SHARED_SECRET is the same in web .env and worker .env.
+- Postiz not reachable:
+	- Ensure docker-compose in postiz is up and port 4007 is open.
+
+## Project status
+
+- Phase 1 foundations are implemented: multitenancy, connector API, approvals, Inngest runtime, worker scaffold.
+
