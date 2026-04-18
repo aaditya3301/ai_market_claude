@@ -56,6 +56,7 @@ Run these SQL files in your Supabase SQL editor in this order:
 1. src/db/migrations/001_schema.sql
 2. src/db/migrations/002_automation_runs.sql
 3. src/db/migrations/003_multitenancy.sql
+4. src/db/migrations/004_phase2_intelligence.sql
 
 ## 4. Start Postiz (Docker)
 

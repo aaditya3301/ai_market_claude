@@ -1,114 +1,32 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Text generation client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-/**
- * Attempt to repair broken JSON from LLM output.
- * Handles unescaped newlines, tabs, and control chars inside string values.
- */
-function repairJson(raw: string): string {
-  // Fix unescaped newlines/tabs/carriage returns inside JSON string values
-  let inString = false;
-  let escaped = false;
-  let result = '';
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-
-    if (escaped) {
-      result += ch;
-      escaped = false;
-      continue;
-    }
-
-    if (ch === '\\') {
-      result += ch;
-      escaped = true;
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = !inString;
-      result += ch;
-      continue;
-    }
-
-    if (inString) {
-      if (ch === '\n') { result += '\\n'; continue; }
-      if (ch === '\r') { result += ''; continue; }
-      if (ch === '\t') { result += '\\t'; continue; }
-      // Replace other control characters
-      const code = ch.charCodeAt(0);
-      if (code < 32) { result += ' '; continue; }
-    }
-
-    result += ch;
-  }
-
-  return result;
-}
+import { llmRouter, type LLMTask } from '@/lib/llm/router';
+import { LEGACY_TENANT_ID } from '@/lib/tenancy/constants';
 
 /**
  * Generate text using Gemini 2.5 Flash with JSON output
  */
-export async function generateText(prompt: string, imageParts?: { data: string; mimeType: string }[]): Promise<any> {
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { responseMimeType: 'application/json' },
+export async function generateText(
+  prompt: string,
+  imageParts?: { data: string; mimeType: string }[],
+  options?: { tenantId?: string; runId?: string; task?: LLMTask }
+): Promise<any> {
+  const response = await llmRouter.call<any>({
+    tenantId: options?.tenantId || LEGACY_TENANT_ID,
+    runId: options?.runId,
+    task: options?.task || 'feature_extraction',
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    responseFormat: 'json',
+    attachments: (imageParts || []).map((img) => ({
+      mimeType: img.mimeType,
+      data: img.data,
+    })),
   });
 
-  const contentParts: any[] = [prompt];
-  if (imageParts) {
-    for (const img of imageParts) {
-      contentParts.push({ inlineData: img });
-    }
-  }
-
-  let attempts = 0;
-  const maxAttempts = 3;
-
-  while (attempts < maxAttempts) {
-    try {
-      if (attempts > 0) {
-        console.log(`[Gemini] Retrying... (Attempt ${attempts + 1}/${maxAttempts})`);
-      }
-
-      const result = await model.generateContent(contentParts);
-      const response = await result.response;
-      let text = response.text();
-
-      // Robust JSON extraction (handles both objects {} and arrays [])
-      const firstBrace = text.indexOf('{');
-      const firstBracket = text.indexOf('[');
-      const startIdx = firstBrace === -1 ? firstBracket : firstBracket === -1 ? firstBrace : Math.min(firstBrace, firstBracket);
-      
-      const lastBrace = text.lastIndexOf('}');
-      const lastBracket = text.lastIndexOf(']');
-      const endIdx = Math.max(lastBrace, lastBracket);
-
-      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        text = text.substring(startIdx, endIdx + 1);
-      } else {
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      }
-
-      // Try direct parse first, then repaired parse
-      try {
-        return JSON.parse(text);
-      } catch {
-        const repaired = repairJson(text);
-        return JSON.parse(repaired);
-      }
-    } catch (e) {
-      console.error(`[Gemini] Parse failed attempt ${attempts + 1}:`, e);
-      attempts++;
-      if (attempts >= maxAttempts) {
-        throw new Error('AI failed to generate valid response after multiple attempts.');
-      }
-      await new Promise(resolve => setTimeout(resolve, 1500));
-    }
-  }
+  return response.data;
 }
 
 /**
