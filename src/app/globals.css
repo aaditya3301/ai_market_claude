@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --violet-primary: #8b5cf6; /* violet-500 */
+  --violet-hover: #a78bfa; /* violet-400 */
+  --violet-light: #2e1065; /* violet-950 */
+  --emerald-primary: #10b981;
+  --emerald-light: #064e3b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-violet-primary: var(--violet-primary);
+  --color-violet-hover: var(--violet-hover);
+  --color-violet-light: var(--violet-light);
+  --color-emerald-primary: var(--emerald-primary);
+  --color-emerald-light: var(--emerald-light);
+  
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+/* Glassmorphism utility */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(24, 24, 27, 0.6); /* Transparent zinc-900 */
+  border: 1px solid rgba(255, 255, 255, 0.05); /* Subtle light border */
+}
+
+/* Scrollbar styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-500) transparent;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
