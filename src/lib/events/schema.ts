@@ -41,4 +41,41 @@ export type Events = {
   'credentials.validate.scheduled': {
     data: Record<string, never>;
   };
+  'brand.knowledge.sync.initial': {
+    data: {
+      tenant_id: string;
+      brand_id?: string;
+    };
+  };
+  'brand.knowledge.sync.delta': {
+    data: {
+      tenant_id: string;
+    };
+  };
+  'knowledge.embed.pending': {
+    data: {
+      tenant_id: string;
+      limit?: number;
+    };
+  };
+  'metrics.refresh.tenant': {
+    data: {
+      tenant_id: string;
+    };
+  };
+  'artifact.features.extract.daily': {
+    data: {
+      tenant_id: string;
+    };
+  };
+  'competitors.scan.daily': {
+    data: {
+      tenant_id: string;
+    };
+  };
+  'trends.detect.daily': {
+    data: {
+      tenant_id: string;
+    };
+  };
 };

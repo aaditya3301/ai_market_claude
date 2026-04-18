@@ -86,7 +86,7 @@ export const weeklyPlanningCycle = inngest.createFunction(
     id: 'weekly-planning-cycle',
     triggers: { event: 'run.requested' },
     concurrency: [
-      { scope: 'env', limit: 50 },
+      { scope: 'env', key: 'global', limit: 50 },
       { scope: 'fn', key: 'event.data.tenant_id', limit: 2 },
     ],
     retries: 3,
@@ -116,7 +116,7 @@ export const weeklyPlanningCycle = inngest.createFunction(
         tenantId,
         runId,
         stepName: 'planning_create',
-        work: () => executePlanningCreateStep({ ...inputs, tenantId }),
+        work: () => executePlanningCreateStep({ ...inputs, tenantId, runId }),
       })
     )) as PlanningOutput;
 
@@ -146,6 +146,7 @@ export const weeklyPlanningCycle = inngest.createFunction(
             tenantId,
             brandPlanId: planning.brandPlanId,
             productName: planning.productName,
+            runId,
           }),
       })
     );

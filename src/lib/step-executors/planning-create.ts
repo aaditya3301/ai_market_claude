@@ -1,4 +1,4 @@
-import { createPlanAndSeedCampaigns } from '@/lib/planning-service';
+import { runPlanningAgent } from '@/lib/agents/planning/graph';
 import { assertNoImplicitAutomationBrand, getAutomationBrandId } from '@/lib/utils';
 
 export interface PlanningCreateStepOutput {
@@ -30,8 +30,10 @@ export async function executePlanningCreateStep(inputPayload: Record<string, unk
   }
   assertNoImplicitAutomationBrand(brandId);
 
-  const result = await createPlanAndSeedCampaigns(
-    {
+  const result = await runPlanningAgent({
+    tenantId,
+    runId: typeof inputPayload.runId === 'string' ? inputPayload.runId : undefined,
+    input: {
       tenantId,
       brandId,
       productName,
@@ -42,11 +44,11 @@ export async function executePlanningCreateStep(inputPayload: Record<string, unk
       twitterUrl: (inputPayload.twitterUrl as string | undefined) || '',
       imageBase64: (inputPayload.imageBase64 as string | null | undefined) || null,
     },
-    {
+    options: {
       // In orchestration, campaign launch is handled by the next step.
       createSeedCampaigns: false,
-    }
-  );
+    },
+  });
 
   return {
     tenantId,

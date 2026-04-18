@@ -1,5 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase';
 import { generateArtifactContent, generateImage } from '@/lib/gemini';
+import { RETRIEVAL_POLICIES } from '@/lib/intelligence/retrieval-policies';
+import { retrieveWithPolicy } from '@/lib/intelligence/retriever';
 import { LEGACY_TENANT_ID } from '@/lib/tenancy/constants';
 
 export async function createAndGenerateCampaign({
@@ -72,7 +74,39 @@ export async function createAndGenerateCampaign({
   for (const platform of platforms) {
     try {
       console.log(`[Campaign Service] Generating text for ${platform}...`);
-      const content = await generateArtifactContent(platform, brandContext);
+      const policy =
+        platform.toLowerCase() === 'linkedin'
+          ? RETRIEVAL_POLICIES.linkedin_long_form
+          : platform.toLowerCase() === 'instagram'
+            ? RETRIEVAL_POLICIES.instagram_caption
+            : RETRIEVAL_POLICIES.ad_hook;
+
+      const retrieval = await retrieveWithPolicy({
+        tenantId: activeTenantId,
+        text: `${plan.product_name} ${plan.product_description} ${objective} ${platform}`,
+        policy,
+      });
+
+      const retrievalContext = retrieval.chunks
+        .slice(0, 6)
+        .map((chunk) => `- ${chunk.content}`)
+        .join('\n');
+
+      const winnersContext = retrieval.winners
+        .slice(0, 5)
+        .map((winner) => `- [${winner.percentile.toFixed(2)}] ${winner.text_content || ''}`)
+        .join('\n');
+
+      const content = await generateArtifactContent(platform, {
+        ...brandContext,
+        warRoomInsights: [
+          brandContext.warRoomInsights || '',
+          retrievalContext ? `Retrieved brand context:\n${retrievalContext}` : '',
+          winnersContext ? `Past winners to learn from:\n${winnersContext}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      });
 
       // Clean markdown bold
       let cleanText = content.text_content;
@@ -159,7 +193,38 @@ export async function generateDailyPost(campaignId: string, tenantId: string = L
     description: campaign.brand_plans.product_description,
     objective: campaign.objective,
     brandTone: 'Engaging',
+    warRoomInsights: undefined as string | undefined,
   };
+
+  const policy =
+    selectedPlatform.toLowerCase() === 'linkedin'
+      ? RETRIEVAL_POLICIES.linkedin_long_form
+      : selectedPlatform.toLowerCase() === 'instagram'
+        ? RETRIEVAL_POLICIES.instagram_caption
+        : RETRIEVAL_POLICIES.ad_hook;
+
+  const retrieval = await retrieveWithPolicy({
+    tenantId,
+    text: `${campaign.brand_plans.product_name} ${campaign.objective} ${selectedPlatform}`,
+    policy,
+  });
+
+  const retrievalContext = retrieval.chunks
+    .slice(0, 5)
+    .map((chunk) => `- ${chunk.content}`)
+    .join('\n');
+
+  const winnersContext = retrieval.winners
+    .slice(0, 4)
+    .map((winner) => `- [${winner.percentile.toFixed(2)}] ${winner.text_content || ''}`)
+    .join('\n');
+
+  brandContext.warRoomInsights = [
+    retrievalContext ? `Retrieved context:\n${retrievalContext}` : '',
+    winnersContext ? `Past winners:\n${winnersContext}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   // 3. Generate New Content
   console.log(`[Daily Post] Generating for ${selectedPlatform}...`);

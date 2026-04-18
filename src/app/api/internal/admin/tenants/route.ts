@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createTenant } from '@/lib/tenancy/service';
+import { inngest } from '@/lib/events/client';
 
 function assertBootstrapToken(req: Request) {
   const token = req.headers.get('x-bootstrap-token') || '';
@@ -21,6 +22,14 @@ export async function POST(req: Request) {
       slug: String(body.slug || '').trim(),
       timezone: body.timezone ? String(body.timezone) : undefined,
       planCode: body.plan_code ? String(body.plan_code) : undefined,
+    });
+
+    await inngest.send({
+      name: 'brand.knowledge.sync.initial',
+      data: {
+        tenant_id: tenant.id,
+        brand_id: String(body.brand_id || '').trim() || undefined,
+      },
     });
 
     return NextResponse.json({ success: true, data: tenant });

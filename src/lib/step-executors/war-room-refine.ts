@@ -1,11 +1,11 @@
 import { createServiceRoleClient } from '@/lib/supabase';
-import { generateText } from '@/lib/gemini';
-import { runStrategyDebate } from '@/lib/war-room-service';
+import { runGroundedWarRoomAgent } from '@/lib/agents/war-room/graph';
 
 export interface WarRoomRefineStepInput {
   tenantId: string;
   brandPlanId: string;
   productName: string;
+  runId?: string;
 }
 
 export interface WarRoomRefineStepOutput {
@@ -29,28 +29,28 @@ export async function executeWarRoomRefineStep(
     throw new Error('WAR_ROOM_PLAN_NOT_FOUND: Unable to load brand plan for war room step.');
   }
 
-  const strategy = plan.ai_research_result || {};
-  const debateMessages = await runStrategyDebate({
-    product_name: planningOutput.productName || plan.product_name || 'Brand',
-    product_description: plan.product_description || '',
-    target_audience:
-      strategy?.ideal_customer_profile?.summary || strategy?.target_audience || 'General audience',
-    strategy_overview:
-      strategy?.suggested_strategies?.[0]?.description || strategy?.strategy_summary || 'Strategy TBD',
+  const strategy = (plan.ai_research_result as Record<string, unknown> | null) || {};
+
+  const grounded = await runGroundedWarRoomAgent({
+    tenantId: planningOutput.tenantId,
+    runId: planningOutput.runId,
+    planSnapshot: {
+      product_name: planningOutput.productName || plan.product_name || 'Brand',
+      product_description: plan.product_description || '',
+      strategy,
+      brand_plan_id: planningOutput.brandPlanId,
+    },
   });
 
-  const summaryPrompt = `Summarize the following War Room debate into 3 critical strategic directives (1 paragraph) for our future marketing campaigns:\n\n${JSON.stringify(
-    debateMessages
-  )}\n\nReturn JSON: {"war_room_insights": "string"}`;
-
-  const summaryObj = await generateText(summaryPrompt);
   const warRoomInsights =
-    (summaryObj?.war_room_insights as string | undefined) ||
+    grounded.warRoomInsights ||
     'Use data-led positioning, tighten audience-message fit, and prioritize repeatable creative testing.';
 
   const updatedResearch = {
     ...(plan.ai_research_result || {}),
     war_room_insights: warRoomInsights,
+    war_room_output: grounded.output,
+    war_room_transcript: grounded.transcript,
   };
 
   const { error: updateError } = await db
@@ -65,7 +65,7 @@ export async function executeWarRoomRefineStep(
 
   return {
     brandPlanId: planningOutput.brandPlanId,
-    messageCount: Array.isArray(debateMessages) ? debateMessages.length : 0,
+    messageCount: grounded.transcript.length,
     warRoomInsights,
   };
 }

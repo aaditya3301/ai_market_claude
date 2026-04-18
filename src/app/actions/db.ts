@@ -1,10 +1,14 @@
 'use server';
 
-import { supabase } from '@/lib/supabase';
+import { createServiceRoleClient } from '@/lib/supabase';
+
+function db() {
+  return createServiceRoleClient();
+}
 
 // Planning Actions
 export async function getBrandPlansAction(brandId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('brand_plans')
     .select('*')
     .eq('brand_id', brandId)
@@ -14,7 +18,7 @@ export async function getBrandPlansAction(brandId: string) {
 }
 
 export async function getBrandPlanByIdAction(id: string) {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('brand_plans')
     .select('*')
     .eq('id', id)
@@ -25,7 +29,7 @@ export async function getBrandPlanByIdAction(id: string) {
 
 // Campaign Actions
 export async function getCampaignsAction(brandId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('campaigns')
     .select(`*, brand_plans ( product_name, duration )`)
     .eq('brand_id', brandId)
@@ -35,7 +39,7 @@ export async function getCampaignsAction(brandId: string) {
 }
 
 export async function deleteCampaignAction(id: string) {
-  const { error } = await supabase.from('campaigns').delete().eq('id', id);
+  const { error } = await db().from('campaigns').delete().eq('id', id);
   if (error) throw new Error(error.message);
   return true;
 }
@@ -43,8 +47,8 @@ export async function deleteCampaignAction(id: string) {
 // Workspace Actions
 export async function getCampaignWorkspaceAction(campaignId: string) {
   const [campRes, artRes] = await Promise.all([
-    supabase.from('campaigns').select('*, brand_plans(product_name)').eq('id', campaignId).single(),
-    supabase.from('artifacts').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: false })
+    db().from('campaigns').select('*, brand_plans(product_name)').eq('id', campaignId).single(),
+    db().from('artifacts').select('*').eq('campaign_id', campaignId).order('created_at', { ascending: false })
   ]);
   if (campRes.error) throw new Error(campRes.error.message);
   return { campaign: campRes.data, artifacts: artRes.data || [] };
@@ -52,13 +56,13 @@ export async function getCampaignWorkspaceAction(campaignId: string) {
 
 // Artifact Actions
 export async function updateArtifactTextAction(id: string, text_content: string) {
-  const { error } = await supabase.from('artifacts').update({ text_content }).eq('id', id);
+  const { error } = await db().from('artifacts').update({ text_content }).eq('id', id);
   if (error) throw new Error(error.message);
   return true;
 }
 
 export async function publishArtifactAction(id: string) {
-  const { error } = await supabase.from('artifacts').update({ status: 'published' }).eq('id', id);
+  const { error } = await db().from('artifacts').update({ status: 'published' }).eq('id', id);
   if (error) throw new Error(error.message);
   return true;
 }
